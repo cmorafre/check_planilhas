@@ -1,0 +1,409 @@
+{% extends "base.html" %}
+
+{% block title %}Configurar Filtros - Comparador de Planilhas{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <h3>⚙️ Configurar Filtros e Comparação</h3>
+                <p class="mb-0">
+                    <strong>Origem:</strong> {{ file1_name }} ({{ preview.file1.total_rows }} linhas)
+                    <span class="mx-2">vs</span>
+                    <strong>Destino:</strong> {{ file2_name }} ({{ preview.file2.total_rows }} linhas)
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('compare_with_filters') }}" id="compareForm">
+    <div class="row">
+        <!-- Seleção de Colunas -->
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>🗂️ Selecionar Colunas para Comparação (Opcional)</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Deixe em branco para comparar todas as colunas</p>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Colunas Disponíveis na Origem:</h6>
+                            {% for column in preview.file1.columns %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="selected_columns" 
+                                       value="{{ column }}" id="col_{{ loop.index }}">
+                                <label class="form-check-label" for="col_{{ loop.index }}">
+                                    {{ column }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Colunas Disponíveis no Destino:</h6>
+                            {% for column in preview.file2.columns %}
+                                {% if column not in preview.file1.columns %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="selected_columns" 
+                                           value="{{ column }}" id="col_dest_{{ loop.index }}">
+                                    <label class="form-check-label" for="col_dest_{{ loop.index }}">
+                                        {{ column }} <span class="badge bg-info">Apenas no destino</span>
+                                    </label>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllColumns()">
+                            Selecionar Todas
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllColumns()">
+                            Limpar Seleção
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seleção de Totalizadores -->
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>📊 Seleção de Totalizadores (Opcional)</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Selecione campos numéricos para calcular totais (soma, média, mín, máx)</p>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Campos Numéricos - Origem:</h6>
+                            {% if preview.file1.numeric_columns %}
+                                {% for column in preview.file1.numeric_columns %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="total_columns" 
+                                           value="{{ column }}" id="total_orig_{{ loop.index }}">
+                                    <label class="form-check-label" for="total_orig_{{ loop.index }}">
+                                        📈 {{ column }}
+                                    </label>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-muted">Nenhum campo numérico encontrado</p>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h6>Campos Numéricos - Destino:</h6>
+                            {% if preview.file2.numeric_columns %}
+                                {% for column in preview.file2.numeric_columns %}
+                                    {% if column not in preview.file1.numeric_columns %}
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="total_columns" 
+                                               value="{{ column }}" id="total_dest_{{ loop.index }}">
+                                        <label class="form-check-label" for="total_dest_{{ loop.index }}">
+                                            📈 {{ column }} <span class="badge bg-info">Apenas no destino</span>
+                                        </label>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-muted">Nenhum campo numérico encontrado</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-sm btn-outline-success" onclick="selectAllTotals()">
+                            Selecionar Todos os Numéricos
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllTotals()">
+                            Limpar Totalizadores
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros Planilha Origem -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>🔍 Filtros - Planilha Origem</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Preview dos dados -->
+                    <div class="mb-3">
+                        <h6>Preview dos dados (primeiras 5 linhas):</h6>
+                        <div class="table-responsive" style="max-height: 300px;">
+                            <table class="table table-sm table-striped">
+                                <thead>
+                                    <tr>
+                                        {% for column in preview.file1.columns %}
+                                        <th>{{ column }}</th>
+                                        {% endfor %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in preview.file1.sample_data %}
+                                    <tr>
+                                        {% for column in preview.file1.columns %}
+                                        <td>{{ row[column] if row[column] is not none else 'VAZIO' }}</td>
+                                        {% endfor %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Interface de filtros -->
+                    <div id="filters1-container">
+                        <h6>Adicionar Filtros:</h6>
+                        <div class="filter-group" data-filter-index="0">
+                            <div class="row mb-2">
+                                <div class="col-4">
+                                    <select class="form-select form-select-sm filter-column" onchange="updateFilter(1, 0)">
+                                        <option value="">Selecione coluna</option>
+                                        {% for column in preview.file1.columns %}
+                                        <option value="{{ column }}">{{ column }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-3">
+                                    <select class="form-select form-select-sm filter-operator" onchange="updateFilter(1, 0)">
+                                        <option value="equals">Igual a</option>
+                                        <option value="not_equals">Diferente de</option>
+                                        <option value="contains">Contém</option>
+                                        <option value="not_contains">Não contém</option>
+                                        <option value="starts_with">Inicia com</option>
+                                        <option value="ends_with">Termina com</option>
+                                        <option value="greater_than">Maior que</option>
+                                        <option value="less_than">Menor que</option>
+                                        <option value="is_empty">Está vazio</option>
+                                        <option value="is_not_empty">Não está vazio</option>
+                                    </select>
+                                </div>
+                                <div class="col-4">
+                                    <input type="text" class="form-control form-control-sm filter-value" 
+                                           placeholder="Valor" onchange="updateFilter(1, 0)">
+                                </div>
+                                <div class="col-1">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                                            onclick="removeFilter(1, 0)">×</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addFilter(1)">
+                        + Adicionar Filtro
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros Planilha Destino -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>🔍 Filtros - Planilha Destino</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Preview dos dados -->
+                    <div class="mb-3">
+                        <h6>Preview dos dados (primeiras 5 linhas):</h6>
+                        <div class="table-responsive" style="max-height: 300px;">
+                            <table class="table table-sm table-striped">
+                                <thead>
+                                    <tr>
+                                        {% for column in preview.file2.columns %}
+                                        <th>{{ column }}</th>
+                                        {% endfor %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in preview.file2.sample_data %}
+                                    <tr>
+                                        {% for column in preview.file2.columns %}
+                                        <td>{{ row[column] if row[column] is not none else 'VAZIO' }}</td>
+                                        {% endfor %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Interface de filtros -->
+                    <div id="filters2-container">
+                        <h6>Adicionar Filtros:</h6>
+                        <div class="filter-group" data-filter-index="0">
+                            <div class="row mb-2">
+                                <div class="col-4">
+                                    <select class="form-select form-select-sm filter-column" onchange="updateFilter(2, 0)">
+                                        <option value="">Selecione coluna</option>
+                                        {% for column in preview.file2.columns %}
+                                        <option value="{{ column }}">{{ column }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-3">
+                                    <select class="form-select form-select-sm filter-operator" onchange="updateFilter(2, 0)">
+                                        <option value="equals">Igual a</option>
+                                        <option value="not_equals">Diferente de</option>
+                                        <option value="contains">Contém</option>
+                                        <option value="not_contains">Não contém</option>
+                                        <option value="starts_with">Inicia com</option>
+                                        <option value="ends_with">Termina com</option>
+                                        <option value="greater_than">Maior que</option>
+                                        <option value="less_than">Menor que</option>
+                                        <option value="is_empty">Está vazio</option>
+                                        <option value="is_not_empty">Não está vazio</option>
+                                    </select>
+                                </div>
+                                <div class="col-4">
+                                    <input type="text" class="form-control form-control-sm filter-value" 
+                                           placeholder="Valor" onchange="updateFilter(2, 0)">
+                                </div>
+                                <div class="col-1">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                                            onclick="removeFilter(2, 0)">×</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addFilter(2)">
+                        + Adicionar Filtro
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Campos ocultos para enviar os filtros -->
+    <input type="hidden" name="filters1" id="filters1" value="[]">
+    <input type="hidden" name="filters2" id="filters2" value="[]">
+
+    <!-- Botões de ação -->
+    <div class="row mt-4">
+        <div class="col-12 text-center">
+            <button type="submit" class="btn btn-success btn-lg me-3">
+                🚀 Comparar com Filtros
+            </button>
+            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                ↩️ Voltar
+            </a>
+        </div>
+    </div>
+</form>
+
+<script>
+let filterCounters = {1: 1, 2: 1};
+let filters = {1: [], 2: []};
+
+// Seleção de colunas
+function selectAllColumns() {
+    document.querySelectorAll('input[name="selected_columns"]').forEach(cb => cb.checked = true);
+}
+
+function clearAllColumns() {
+    document.querySelectorAll('input[name="selected_columns"]').forEach(cb => cb.checked = false);
+}
+
+// Seleção de totalizadores
+function selectAllTotals() {
+    document.querySelectorAll('input[name="total_columns"]').forEach(cb => cb.checked = true);
+}
+
+function clearAllTotals() {
+    document.querySelectorAll('input[name="total_columns"]').forEach(cb => cb.checked = false);
+}
+
+// Gerenciamento de filtros
+function addFilter(fileNum) {
+    const container = document.getElementById(`filters${fileNum}-container`);
+    const index = filterCounters[fileNum];
+    
+    const columns = fileNum === 1 ? {{ preview.file1.columns | tojson }} : {{ preview.file2.columns | tojson }};
+    
+    const filterHtml = `
+        <div class="filter-group" data-filter-index="${index}">
+            <div class="row mb-2">
+                <div class="col-4">
+                    <select class="form-select form-select-sm filter-column" onchange="updateFilter(${fileNum}, ${index})">
+                        <option value="">Selecione coluna</option>
+                        ${columns.map(col => `<option value="${col}">${col}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="col-3">
+                    <select class="form-select form-select-sm filter-operator" onchange="updateFilter(${fileNum}, ${index})">
+                        <option value="equals">Igual a</option>
+                        <option value="not_equals">Diferente de</option>
+                        <option value="contains">Contém</option>
+                        <option value="not_contains">Não contém</option>
+                        <option value="starts_with">Inicia com</option>
+                        <option value="ends_with">Termina com</option>
+                        <option value="greater_than">Maior que</option>
+                        <option value="less_than">Menor que</option>
+                        <option value="is_empty">Está vazio</option>
+                        <option value="is_not_empty">Não está vazio</option>
+                    </select>
+                </div>
+                <div class="col-4">
+                    <input type="text" class="form-control form-control-sm filter-value" 
+                           placeholder="Valor" onchange="updateFilter(${fileNum}, ${index})">
+                </div>
+                <div class="col-1">
+                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                            onclick="removeFilter(${fileNum}, ${index})">×</button>
+                </div>
+            </div>
+        </div>`;
+    
+    container.insertAdjacentHTML('beforeend', filterHtml);
+    filterCounters[fileNum]++;
+}
+
+function removeFilter(fileNum, index) {
+    const filterGroup = document.querySelector(`#filters${fileNum}-container .filter-group[data-filter-index="${index}"]`);
+    if (filterGroup) {
+        filterGroup.remove();
+        updateAllFilters(fileNum);
+    }
+}
+
+function updateFilter(fileNum, index) {
+    updateAllFilters(fileNum);
+}
+
+function updateAllFilters(fileNum) {
+    const filterGroups = document.querySelectorAll(`#filters${fileNum}-container .filter-group`);
+    const currentFilters = [];
+    
+    filterGroups.forEach(group => {
+        const column = group.querySelector('.filter-column').value;
+        const operator = group.querySelector('.filter-operator').value;
+        const value = group.querySelector('.filter-value').value;
+        
+        if (column && (operator === 'is_empty' || operator === 'is_not_empty' || value)) {
+            currentFilters.push({
+                column: column,
+                operator: operator,
+                value: value
+            });
+        }
+    });
+    
+    filters[fileNum] = currentFilters;
+    document.getElementById(`filters${fileNum}`).value = JSON.stringify(currentFilters);
+}
+
+// Atualizar filtros ao enviar o formulário
+document.getElementById('compareForm').addEventListener('submit', function() {
+    updateAllFilters(1);
+    updateAllFilters(2);
+});
+</script>
+{% endblock %}

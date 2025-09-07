@@ -1,0 +1,417 @@
+{% extends "base.html" %}
+
+{% block title %}Resultados da Comparação{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card stats-card mb-4">
+            <div class="card-body text-center">
+                <h3>📊 Comparação Concluída</h3>
+                <p class="mb-0">
+                    <strong>Origem:</strong> {{ file1_name }} 
+                    <span class="mx-2">vs</span>
+                    <strong>Destino:</strong> {{ file2_name }}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if results.error %}
+    <div class="alert alert-danger">
+        <h5>❌ Erro ao processar arquivos:</h5>
+        {{ results.error }}
+    </div>
+{% else %}
+
+<!-- Filtros Aplicados -->
+{% if results.filters_applied %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>⚙️ Filtros e Configurações Aplicadas</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <h6>Colunas Selecionadas:</h6>
+                {% if results.filters_applied.selected_columns %}
+                    <ul class="list-unstyled">
+                        {% for col in results.filters_applied.selected_columns %}
+                            <li><span class="badge bg-primary">{{ col }}</span></li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">Todas as colunas</p>
+                {% endif %}
+            </div>
+            
+            <div class="col-md-4">
+                <h6>Filtros na Origem ({{ results.filters_applied.file1|length }}):</h6>
+                {% if results.filters_applied.file1 %}
+                    {% for filter in results.filters_applied.file1 %}
+                        <div class="mb-2 p-2 bg-light rounded">
+                            <strong>{{ filter.column }}</strong> 
+                            <span class="text-muted">{{ filter.operator|replace('_', ' ')|title }}</span>
+                            {% if filter.operator not in ['is_empty', 'is_not_empty'] %}
+                                <code>{{ filter.value }}</code>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">Nenhum filtro aplicado</p>
+                {% endif %}
+            </div>
+            
+            <div class="col-md-4">
+                <h6>Filtros no Destino ({{ results.filters_applied.file2|length }}):</h6>
+                {% if results.filters_applied.file2 %}
+                    {% for filter in results.filters_applied.file2 %}
+                        <div class="mb-2 p-2 bg-light rounded">
+                            <strong>{{ filter.column }}</strong> 
+                            <span class="text-muted">{{ filter.operator|replace('_', ' ')|title }}</span>
+                            {% if filter.operator not in ['is_empty', 'is_not_empty'] %}
+                                <code>{{ filter.value }}</code>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">Nenhum filtro aplicado</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Dimensões das Planilhas -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>📐 Dimensões - Origem</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Linhas:</strong> {{ results.dimensions.file1.rows }}</p>
+                <p><strong>Colunas:</strong> {{ results.dimensions.file1.cols }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5>📐 Dimensões - Destino</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Linhas:</strong> {{ results.dimensions.file2.rows }}</p>
+                <p><strong>Colunas:</strong> {{ results.dimensions.file2.cols }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Diferenças nas Colunas -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>🗂️ Análise das Colunas</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <h6>Colunas Comuns ({{ results.columns.common|length }})</h6>
+                {% if results.columns.common %}
+                    <ul class="list-unstyled">
+                        {% for col in results.columns.common %}
+                            <li><span class="badge bg-success">✓</span> {{ col }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">Nenhuma coluna em comum</p>
+                {% endif %}
+            </div>
+            
+            <div class="col-md-4">
+                <h6>Apenas na Origem ({{ results.columns.only_in_file1|length }})</h6>
+                {% if results.columns.only_in_file1 %}
+                    <ul class="list-unstyled">
+                        {% for col in results.columns.only_in_file1 %}
+                            <li><span class="badge bg-warning">!</span> {{ col }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-success">Nenhuma coluna exclusiva</p>
+                {% endif %}
+            </div>
+            
+            <div class="col-md-4">
+                <h6>Apenas no Destino ({{ results.columns.only_in_file2|length }})</h6>
+                {% if results.columns.only_in_file2 %}
+                    <ul class="list-unstyled">
+                        {% for col in results.columns.only_in_file2 %}
+                            <li><span class="badge bg-info">+</span> {{ col }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-success">Nenhuma coluna exclusiva</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Linhas Extras -->
+{% if results.extra_rows_file1 or results.extra_rows_file2 %}
+<div class="alert alert-info">
+    <h6>📏 Diferenças no Número de Linhas:</h6>
+    {% if results.extra_rows_file1 %}
+        <p>A planilha <strong>origem</strong> tem {{ results.extra_rows_file1 }} linha(s) a mais que a planilha destino.</p>
+    {% endif %}
+    {% if results.extra_rows_file2 %}
+        <p>A planilha <strong>destino</strong> tem {{ results.extra_rows_file2 }} linha(s) a mais que a planilha origem.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Diferenças nos Dados -->
+{% if results.data_differences is defined %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5>🔍 Diferenças nos Dados</h5>
+        <span class="badge bg-primary">{{ results.total_differences }} diferença(s) encontrada(s)</span>
+    </div>
+    <div class="card-body">
+        {% if results.total_differences == 0 %}
+            <div class="alert alert-success">
+                <h6>✅ Parabéns!</h6>
+                <p class="mb-0">As planilhas têm a mesma estrutura e os mesmos dados!</p>
+            </div>
+        {% else %}
+            {% if results.total_differences > 100 %}
+                <div class="alert alert-warning">
+                    <strong>Atenção:</strong> Foram encontradas {{ results.total_differences }} diferenças. 
+                    Mostrando as primeiras 100 para melhor performance.
+                </div>
+            {% endif %}
+            
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Linha</th>
+                            <th>Coluna</th>
+                            <th>Valor Origem</th>
+                            <th>Valor Destino</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for diff in results.data_differences %}
+                        <tr>
+                            <td>{{ diff.row }}</td>
+                            <td><code>{{ diff.column }}</code></td>
+                            <td>
+                                <span class="badge bg-light text-dark">{{ diff.file1_value }}</span>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark">{{ diff.file2_value }}</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Linhas Exclusivas -->
+{% if results.unique_rows %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>🔍 Análise de Existência de Linhas</h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <strong>🔑 Comparação usando campos-chave:</strong><br>
+            {% for col in results.unique_rows.comparison_columns %}
+                <span class="badge bg-primary me-1">{{ col }}</span>
+            {% endfor %}
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card border-warning">
+                    <div class="card-header bg-warning text-dark">
+                        <h6>⚠️ Apenas na ORIGEM: {{ file1_name }} ({{ results.unique_rows.only_in_file1.count }})</h6>
+                    </div>
+                    <div class="card-body">
+                        {% if results.unique_rows.only_in_file1.count > 0 %}
+                            <p><strong>{{ results.unique_rows.only_in_file1.count }} linha(s)</strong> existem apenas na planilha <strong>ORIGEM</strong> ({{ file1_name }}).</p>
+                            
+                            {% if results.unique_rows.only_in_file1.sample %}
+                                <h6>🔍 Linha(s) exclusiva(s) da ORIGEM:</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                {% if results.unique_rows.only_in_file1.sample %}
+                                                    {% for col, value in results.unique_rows.only_in_file1.sample[0].items() %}
+                                                        <th>{{ col }}</th>
+                                                    {% endfor %}
+                                                {% endif %}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for row in results.unique_rows.only_in_file1.sample[:3] %}
+                                            <tr>
+                                                {% for col, value in row.items() %}
+                                                <td {% if col in ['loja', 'nf', 'cod_prod', 'cod_vendedor', 'cod_parceiro', 'serie'] %}class="table-warning fw-bold"{% endif %}>
+                                                    {{ value if value is not none else 'VAZIO' }}
+                                                </td>
+                                                {% endfor %}
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <p class="text-success">✅ Todas as linhas da origem existem no destino</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card border-info">
+                    <div class="card-header bg-info text-white">
+                        <h6>ℹ️ Apenas no DESTINO: {{ file2_name }} ({{ results.unique_rows.only_in_file2.count }})</h6>
+                    </div>
+                    <div class="card-body">
+                        {% if results.unique_rows.only_in_file2.count > 0 %}
+                            <p><strong>{{ results.unique_rows.only_in_file2.count }} linha(s)</strong> existem apenas na planilha <strong>DESTINO</strong> ({{ file2_name }}).</p>
+                            
+                            {% if results.unique_rows.only_in_file2.sample %}
+                                <h6>🎯 Linha(s) exclusiva(s) do DESTINO:</h6>
+                                <div class="alert alert-warning">
+                                    <strong>⚠️ Esta é a linha extra encontrada!</strong>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                {% if results.unique_rows.only_in_file2.sample %}
+                                                    {% for col, value in results.unique_rows.only_in_file2.sample[0].items() %}
+                                                        <th>{{ col }}</th>
+                                                    {% endfor %}
+                                                {% endif %}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for row in results.unique_rows.only_in_file2.sample[:3] %}
+                                            <tr class="table-info">
+                                                {% for col, value in row.items() %}
+                                                <td {% if col in ['LOJA', 'NF', 'COD_PROD', 'COD_VENDEDOR', 'COD_PARCEIRO', 'SERIE'] %}class="table-success fw-bold"{% endif %}>
+                                                    {{ value if value is not none else 'VAZIO' }}
+                                                </td>
+                                                {% endfor %}
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <p class="text-success">✅ Todas as linhas do destino existem na origem</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Totalizadores -->
+{% if results.totals %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5>📊 Totalizadores</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for column in results.totals.columns %}
+            <div class="col-md-6 mb-4">
+                <div class="card border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h6>📈 {{ column }}</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <h6 class="text-primary">Origem:</h6>
+                                {% if results.totals.file1[column] %}
+                                    {% set totals1 = results.totals.file1[column] %}
+                                    <ul class="list-unstyled mb-0">
+                                        <li><strong>Soma:</strong> {{ "{:,.2f}".format(totals1.sum) }}</li>
+                                        <li><strong>Média:</strong> {{ "{:,.2f}".format(totals1.mean) }}</li>
+                                        <li><strong>Mín:</strong> {{ "{:,.2f}".format(totals1.min) }}</li>
+                                        <li><strong>Máx:</strong> {{ "{:,.2f}".format(totals1.max) }}</li>
+                                        <li><strong>Registros:</strong> {{ totals1.count }}</li>
+                                    </ul>
+                                    {% if totals1.error %}
+                                        <p class="text-danger">{{ totals1.error }}</p>
+                                    {% endif %}
+                                {% else %}
+                                    <p class="text-muted">Campo não encontrado na origem</p>
+                                {% endif %}
+                            </div>
+                            <div class="col-6">
+                                <h6 class="text-success">Destino:</h6>
+                                {% if results.totals.file2[column] %}
+                                    {% set totals2 = results.totals.file2[column] %}
+                                    <ul class="list-unstyled mb-0">
+                                        <li><strong>Soma:</strong> {{ "{:,.2f}".format(totals2.sum) }}</li>
+                                        <li><strong>Média:</strong> {{ "{:,.2f}".format(totals2.mean) }}</li>
+                                        <li><strong>Mín:</strong> {{ "{:,.2f}".format(totals2.min) }}</li>
+                                        <li><strong>Máx:</strong> {{ "{:,.2f}".format(totals2.max) }}</li>
+                                        <li><strong>Registros:</strong> {{ totals2.count }}</li>
+                                    </ul>
+                                    {% if totals2.error %}
+                                        <p class="text-danger">{{ totals2.error }}</p>
+                                    {% endif %}
+                                {% else %}
+                                    <p class="text-muted">Campo não encontrado no destino</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Comparação das somas -->
+                        {% if results.totals.file1[column] and results.totals.file2[column] %}
+                            {% set diff = results.totals.file2[column].sum - results.totals.file1[column].sum %}
+                            <hr>
+                            <div class="text-center">
+                                <strong>Diferença na Soma:</strong>
+                                <span class="badge {% if diff > 0 %}bg-success{% elif diff < 0 %}bg-warning{% else %}bg-secondary{% endif %}">
+                                    {{ "{:+,.2f}".format(diff) }}
+                                </span>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+
+<div class="text-center mt-4">
+    <a href="{{ url_for('index') }}" class="btn btn-primary">
+        🔄 Nova Comparação
+    </a>
+</div>
+
+{% endblock %}

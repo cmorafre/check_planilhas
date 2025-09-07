@@ -1,0 +1,892 @@
+{% extends "base.html" %}
+
+{% block title %}Mapeamento de Colunas - Comparador de Planilhas{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <h3>🧠 Análise Inteligente de Mapeamento</h3>
+                <p class="mb-0">
+                    <strong>Origem:</strong> {{ file1_name }} ({{ mapping.file1.total_rows }} linhas, {{ mapping.file1.columns|length }} colunas)
+                    <span class="mx-2">vs</span>
+                    <strong>Destino:</strong> {{ file2_name }} ({{ mapping.file2.total_rows }} linhas, {{ mapping.file2.columns|length }} colunas)
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Status do Mapeamento -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>📊 Resultado da Análise Automática</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="text-center p-3 bg-success rounded text-white">
+                            <h4>{{ mapping.mapping|length }}</h4>
+                            <small>Correspondências Encontradas</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center p-3 bg-warning rounded text-white">
+                            <h4>{{ mapping.unmapped_origin|length }}</h4>
+                            <small>Origem Não Mapeadas</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center p-3 bg-info rounded text-white">
+                            <h4>{{ mapping.unmapped_destination|length }}</h4>
+                            <small>Destino Não Mapeadas</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center p-3 bg-primary rounded text-white">
+                            <h4>{{ mapping.suggested_keys|length }}</h4>
+                            <small>Campos-Chave Sugeridos</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('preview_with_mapping') }}" id="mappingForm">
+    <input type="hidden" name="confirmed_mapping" id="confirmed_mapping" value="">
+    
+    <!-- Campos-Chave Sugeridos -->
+    {% if mapping.suggested_keys %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5>🔑 Campos-Chave Sugeridos para Comparação</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Estes campos foram automaticamente identificados como os melhores para comparar as linhas:
+                    </p>
+                    <div class="row">
+                        {% for key in mapping.suggested_keys %}
+                        <div class="col-md-4 mb-3">
+                            <div class="card bg-light">
+                                <div class="card-body p-3">
+                                    <h6 class="card-title">
+                                        <span class="badge bg-success">Score: {{ "%.1f"|format(key.combined_score) }}</span>
+                                    </h6>
+                                    <p class="mb-1">
+                                        <strong>{{ key.col1 }}</strong> ↔ <strong>{{ key.col2 }}</strong>
+                                    </p>
+                                    <small class="text-muted">
+                                        Origem: {{ "%.0f"|format(key.score1) }} | Destino: {{ "%.0f"|format(key.score2) }}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Mapeamento de Colunas -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>🔗 Mapeamento de Colunas</h5>
+                    <small class="text-muted">Confirme ou ajuste as correspondências encontradas</small>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Coluna Origem</th>
+                                    <th>Tipo</th>
+                                    <th>Amostra</th>
+                                    <th>↔</th>
+                                    <th>Coluna Destino</th>
+                                    <th>Tipo</th>
+                                    <th>Amostra</th>
+                                    <th>Similaridade</th>
+                                    <th>Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for col1, col2 in mapping.mapping.items() %}
+                                <tr class="mapping-row">
+                                    <td>
+                                        <strong>{{ col1 }}</strong>
+                                        <!-- Verificar se é campo-chave -->
+                                        {% for key in mapping.suggested_keys %}
+                                            {% if key.col1 == col1 %}
+                                                <span class="badge bg-warning">🔑 Chave</span>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">
+                                            {{ mapping.file1.content_analysis[col1].type }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {% for sample in mapping.file1.content_analysis[col1].sample[:2] %}
+                                                {{ sample }}{% if not loop.last %}, {% endif %}
+                                            {% endfor %}
+                                        </small>
+                                    </td>
+                                    <td class="text-center">
+                                        <i class="text-success">↔</i>
+                                    </td>
+                                    <td>
+                                        <select class="form-select form-select-sm" name="mapping_{{ col1 }}">
+                                            <option value="">-- Sem correspondência --</option>
+                                            {% for dest_col in mapping.file2.columns %}
+                                            <option value="{{ dest_col }}" 
+                                                    {% if dest_col == col2 %}selected{% endif %}>
+                                                {{ dest_col }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">
+                                            {{ mapping.file2.content_analysis[col2].type }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {% for sample in mapping.file2.content_analysis[col2].sample[:2] %}
+                                                {{ sample }}{% if not loop.last %}, {% endif %}
+                                            {% endfor %}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-success">
+                                            {{ "%.0f"|format(mapping.mapping_details[col1].total_similarity * 100) }}%
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                onclick="removeMapping('{{ col1 }}')">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Colunas não mapeadas -->
+                    {% if mapping.unmapped_origin or mapping.unmapped_destination %}
+                    <div class="mt-4">
+                        <h6>📋 Colunas Não Mapeadas</h6>
+                        <div class="row">
+                            {% if mapping.unmapped_origin %}
+                            <div class="col-md-6">
+                                <h7><strong>Origem:</strong></h7>
+                                <ul class="list-unstyled">
+                                    {% for col in mapping.unmapped_origin %}
+                                    <li class="mb-1">
+                                        <span class="badge bg-warning">{{ col }}</span>
+                                        <button type="button" class="btn btn-sm btn-outline-primary ms-2" 
+                                                onclick="addMapping('{{ col }}', 'origin')">
+                                            + Mapear
+                                        </button>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                            
+                            {% if mapping.unmapped_destination %}
+                            <div class="col-md-6">
+                                <h7><strong>Destino:</strong></h7>
+                                <ul class="list-unstyled">
+                                    {% for col in mapping.unmapped_destination %}
+                                    <li class="mb-1">
+                                        <span class="badge bg-info">{{ col }}</span>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Preview dos Dados -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6>👁️ Preview - Origem</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive" style="max-height: 300px;">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    {% for column in mapping.file1.columns[:6] %}
+                                    <th style="font-size: 0.8em;">{{ column }}</th>
+                                    {% endfor %}
+                                    {% if mapping.file1.columns|length > 6 %}
+                                    <th style="font-size: 0.8em;">...</th>
+                                    {% endif %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in mapping.file1.sample_data %}
+                                <tr>
+                                    {% for column in mapping.file1.columns[:6] %}
+                                    <td style="font-size: 0.8em;">
+                                        {{ row[column] if row[column] is not none else 'VAZIO' }}
+                                    </td>
+                                    {% endfor %}
+                                    {% if mapping.file1.columns|length > 6 %}
+                                    <td style="font-size: 0.8em;">...</td>
+                                    {% endif %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6>👁️ Preview - Destino</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive" style="max-height: 300px;">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    {% for column in mapping.file2.columns[:6] %}
+                                    <th style="font-size: 0.8em;">{{ column }}</th>
+                                    {% endfor %}
+                                    {% if mapping.file2.columns|length > 6 %}
+                                    <th style="font-size: 0.8em;">...</th>
+                                    {% endif %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in mapping.file2.sample_data %}
+                                <tr>
+                                    {% for column in mapping.file2.columns[:6] %}
+                                    <td style="font-size: 0.8em;">
+                                        {{ row[column] if row[column] is not none else 'VAZIO' }}
+                                    </td>
+                                    {% endfor %}
+                                    {% if mapping.file2.columns|length > 6 %}
+                                    <td style="font-size: 0.8em;">...</td>
+                                    {% endif %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sistema de Filtros -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5>🔍 Filtros - Planilha ORIGEM</h5>
+                    <small>Use filtros para reduzir o conjunto de dados antes da comparação</small>
+                </div>
+                <div class="card-body">
+                    <div id="filters1-container">
+                        <div class="filter-group mb-3" data-filter-index="0">
+                            <div class="row">
+                                <div class="col-4">
+                                    <select class="form-select form-select-sm filter-column" name="filter1_column_0" onchange="updateFilterPreview()">
+                                        <option value="">Selecione coluna</option>
+                                        {% for col1, col2 in mapping.mapping.items() %}
+                                        <option value="{{ col1 }}">{{ col1 }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-3">
+                                    <select class="form-select form-select-sm filter-operator" name="filter1_operator_0" onchange="updateFilterPreview()">
+                                        <option value="equals">Igual a</option>
+                                        <option value="not_equals">Diferente de</option>
+                                        <option value="contains">Contém</option>
+                                        <option value="not_contains">Não contém</option>
+                                        <option value="starts_with">Inicia com</option>
+                                        <option value="ends_with">Termina com</option>
+                                        <option value="greater_than">Maior que</option>
+                                        <option value="less_than">Menor que</option>
+                                        <option value="is_empty">Está vazio</option>
+                                        <option value="is_not_empty">Não está vazio</option>
+                                    </select>
+                                </div>
+                                <div class="col-4">
+                                    <input type="text" class="form-control form-control-sm filter-value" 
+                                           name="filter1_value_0" placeholder="Valor" onchange="updateFilterPreview()">
+                                </div>
+                                <div class="col-1">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                                            onclick="removeFilter(1, 0)">×</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addFilter(1)">
+                        ➕ Adicionar Filtro
+                    </button>
+                    
+                    <!-- Preview Filtrado - Origem -->
+                    <div class="mt-3">
+                        <h6>📊 Resultado dos Filtros:</h6>
+                        <div id="origem-filter-stats" class="alert alert-info">
+                            <strong>Total:</strong> {{ mapping.file1.total_rows }} linhas
+                        </div>
+                        <div id="origem-filtered-preview" class="table-responsive" style="max-height: 200px;">
+                            <!-- Preview dos dados filtrados será carregado aqui -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5>🔍 Filtros - Planilha DESTINO</h5>
+                    <small>Use filtros para reduzir o conjunto de dados antes da comparação</small>
+                </div>
+                <div class="card-body">
+                    <div id="filters2-container">
+                        <div class="filter-group mb-3" data-filter-index="0">
+                            <div class="row">
+                                <div class="col-4">
+                                    <select class="form-select form-select-sm filter-column" name="filter2_column_0" onchange="updateFilterPreview()">
+                                        <option value="">Selecione coluna</option>
+                                        {% for col2 in mapping.file2.columns %}
+                                            {% if col2 in mapping.mapping.values() %}
+                                            <option value="{{ col2 }}">{{ col2 }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-3">
+                                    <select class="form-select form-select-sm filter-operator" name="filter2_operator_0" onchange="updateFilterPreview()">
+                                        <option value="equals">Igual a</option>
+                                        <option value="not_equals">Diferente de</option>
+                                        <option value="contains">Contém</option>
+                                        <option value="not_contains">Não contém</option>
+                                        <option value="starts_with">Inicia com</option>
+                                        <option value="ends_with">Termina com</option>
+                                        <option value="greater_than">Maior que</option>
+                                        <option value="less_than">Menor que</option>
+                                        <option value="is_empty">Está vazio</option>
+                                        <option value="is_not_empty">Não está vazio</option>
+                                    </select>
+                                </div>
+                                <div class="col-4">
+                                    <input type="text" class="form-control form-control-sm filter-value" 
+                                           name="filter2_value_0" placeholder="Valor" onchange="updateFilterPreview()">
+                                </div>
+                                <div class="col-1">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                                            onclick="removeFilter(2, 0)">×</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addFilter(2)">
+                        ➕ Adicionar Filtro
+                    </button>
+                    
+                    <!-- Preview Filtrado - Destino -->
+                    <div class="mt-3">
+                        <h6>📊 Resultado dos Filtros:</h6>
+                        <div id="destino-filter-stats" class="alert alert-info">
+                            <strong>Total:</strong> {{ mapping.file2.total_rows }} linhas
+                        </div>
+                        <div id="destino-filtered-preview" class="table-responsive" style="max-height: 200px;">
+                            <!-- Preview dos dados filtrados será carregado aqui -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Seleção de Totalizadores (Opcional) -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>📊 Seleção de Totalizadores (Opcional)</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Selecione campos numéricos para calcular totais (soma, média, mín, máx)</p>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Campos Numéricos Mapeados:</h6>
+                            <!-- Listar campos numéricos mapeados -->
+                            {% for col1, col2 in mapping.mapping.items() %}
+                                {% if col1 in mapping.file1.content_analysis and mapping.file1.content_analysis[col1].type == 'numeric' %}
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="total_columns" 
+                                               value="{{ col1 }}" id="total_{{ loop.index }}">
+                                        <label class="form-check-label" for="total_{{ loop.index }}">
+                                            📈 {{ col1 }} ↔ {{ col2 }}
+                                        </label>
+                                    </div>
+                                {% endif %}
+                            {% else %}
+                                <p class="text-muted">Nenhum campo numérico mapeado encontrado</p>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h6>Ações Rápidas:</h6>
+                            <button type="button" class="btn btn-sm btn-outline-success" onclick="selectAllTotals()">
+                                Selecionar Todos os Numéricos
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllTotals()">
+                                Limpar Totalizadores
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botões de Ação -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center">
+                    <button type="button" class="btn btn-success btn-lg me-3" onclick="proceedWithFiltersAndMapping()">
+                        🚀 Comparar com Mapeamento e Filtros
+                    </button>
+                    <button type="button" class="btn btn-outline-primary btn-lg me-3" onclick="proceedWithMapping()">
+                        ⚡ Comparar Apenas com Mapeamento
+                    </button>
+                    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                        ↩️ Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Hidden inputs para filtros -->
+    <input type="hidden" name="filters1" id="filters1" value="[]">
+    <input type="hidden" name="filters2" id="filters2" value="[]">
+    
+</form>
+
+<script>
+// Variáveis globais para controle de filtros
+let filterCount1 = 1;
+let filterCount2 = 1;
+
+// Funções de mapeamento
+function removeMapping(col1) {
+    const select = document.querySelector(`select[name="mapping_${col1}"]`);
+    if (select) {
+        select.value = '';
+    }
+}
+
+function addMapping(col, source) {
+    alert(`Funcionalidade para adicionar mapeamento de "${col}" será implementada em breve.`);
+}
+
+function collectCurrentMapping() {
+    const mapping = {};
+    const selects = document.querySelectorAll('select[name^="mapping_"]');
+    
+    selects.forEach(select => {
+        const col1 = select.name.replace('mapping_', '');
+        const col2 = select.value;
+        if (col2 && col2 !== '') {
+            mapping[col1] = col2;
+        }
+    });
+    
+    return mapping;
+}
+
+// Funções de filtros
+function addFilter(planilhaNum) {
+    const container = document.getElementById(`filters${planilhaNum}-container`);
+    const filterIndex = planilhaNum === 1 ? filterCount1 : filterCount2;
+    
+    const newFilter = document.createElement('div');
+    newFilter.className = 'filter-group mb-3';
+    newFilter.setAttribute('data-filter-index', filterIndex);
+    
+    // Definir as opções de colunas baseado na planilha
+    let columnOptions = '';
+    if (planilhaNum === 1) {
+        // Origem - usar colunas mapeadas da origem
+        {% for col1, col2 in mapping.mapping.items() %}
+        columnOptions += `<option value="{{ col1 }}">{{ col1 }}</option>`;
+        {% endfor %}
+    } else {
+        // Destino - usar colunas mapeadas do destino
+        {% for col2 in mapping.file2.columns %}
+            {% if col2 in mapping.mapping.values() %}
+            columnOptions += `<option value="{{ col2 }}">{{ col2 }}</option>`;
+            {% endif %}
+        {% endfor %}
+    }
+    
+    newFilter.innerHTML = `
+        <div class="row">
+            <div class="col-4">
+                <select class="form-select form-select-sm filter-column" name="filter${planilhaNum}_column_${filterIndex}" onchange="updateFilterPreview()">
+                    <option value="">Selecione coluna</option>
+                    ${columnOptions}
+                </select>
+            </div>
+            <div class="col-3">
+                <select class="form-select form-select-sm filter-operator" name="filter${planilhaNum}_operator_${filterIndex}" onchange="updateFilterPreview()">
+                    <option value="equals">Igual a</option>
+                    <option value="not_equals">Diferente de</option>
+                    <option value="contains">Contém</option>
+                    <option value="not_contains">Não contém</option>
+                    <option value="starts_with">Inicia com</option>
+                    <option value="ends_with">Termina com</option>
+                    <option value="greater_than">Maior que</option>
+                    <option value="less_than">Menor que</option>
+                    <option value="is_empty">Está vazio</option>
+                    <option value="is_not_empty">Não está vazio</option>
+                </select>
+            </div>
+            <div class="col-4">
+                <input type="text" class="form-control form-control-sm filter-value" 
+                       name="filter${planilhaNum}_value_${filterIndex}" placeholder="Valor" onchange="updateFilterPreview()">
+            </div>
+            <div class="col-1">
+                <button type="button" class="btn btn-sm btn-outline-danger" 
+                        onclick="removeFilter(${planilhaNum}, ${filterIndex})">×</button>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(newFilter);
+    
+    // Incrementar contador
+    if (planilhaNum === 1) {
+        filterCount1++;
+    } else {
+        filterCount2++;
+    }
+}
+
+function removeFilter(planilhaNum, filterIndex) {
+    const filterGroup = document.querySelector(`#filters${planilhaNum}-container .filter-group[data-filter-index="${filterIndex}"]`);
+    if (filterGroup) {
+        filterGroup.remove();
+        updateFilterPreview();
+    }
+}
+
+function collectFilters(planilhaNum) {
+    const filters = [];
+    const container = document.getElementById(`filters${planilhaNum}-container`);
+    
+    console.log(`[DEBUG] Coletando filtros para planilha ${planilhaNum}`);
+    console.log(`[DEBUG] Container encontrado:`, container);
+    
+    if (!container) {
+        console.error(`[ERROR] Container filters${planilhaNum}-container não encontrado`);
+        return [];
+    }
+    
+    const filterGroups = container.querySelectorAll('.filter-group');
+    console.log(`[DEBUG] ${filterGroups.length} grupos de filtro encontrados`);
+    
+    filterGroups.forEach((group, index) => {
+        const filterIndex = group.getAttribute('data-filter-index');
+        const columnSelect = group.querySelector(`select[name="filter${planilhaNum}_column_${filterIndex}"]`);
+        const operatorSelect = group.querySelector(`select[name="filter${planilhaNum}_operator_${filterIndex}"]`);
+        const valueInput = group.querySelector(`input[name="filter${planilhaNum}_value_${filterIndex}"]`);
+        
+        const column = columnSelect?.value;
+        const operator = operatorSelect?.value;
+        const value = valueInput?.value;
+        
+        console.log(`[DEBUG] Filtro ${index + 1}:`, { 
+            filterIndex, 
+            column, 
+            operator, 
+            value,
+            columnSelect: !!columnSelect,
+            operatorSelect: !!operatorSelect,
+            valueInput: !!valueInput
+        });
+        
+        if (column && operator) {
+            filters.push({
+                column: column,
+                operator: operator,
+                value: value || ''
+            });
+        } else {
+            console.warn(`[WARN] Filtro ${index + 1} incompleto: coluna='${column}', operador='${operator}'`);
+        }
+    });
+    
+    console.log(`[DEBUG] Total de filtros válidos coletados para planilha ${planilhaNum}:`, filters.length);
+    return filters;
+}
+
+function updateFilterPreview() {
+    const filters1 = collectFilters(1);
+    const filters2 = collectFilters(2);
+    
+    // Atualizar os hidden inputs
+    document.getElementById('filters1').value = JSON.stringify(filters1);
+    document.getElementById('filters2').value = JSON.stringify(filters2);
+    
+    // Fazer requisições AJAX para preview
+    updateFilterPreviewAjax(1, filters1);
+    updateFilterPreviewAjax(2, filters2);
+}
+
+function updateFilterPreviewAjax(planilhaNum, filters) {
+    // Mostrar indicador de carregamento
+    const statsDiv = document.getElementById(`${planilhaNum === 1 ? 'origem' : 'destino'}-filter-stats`);
+    const previewDiv = document.getElementById(`${planilhaNum === 1 ? 'origem' : 'destino'}-filtered-preview`);
+    
+    statsDiv.innerHTML = '<i class="spinner-border spinner-border-sm"></i> Aplicando filtros...';
+    statsDiv.className = 'alert alert-secondary';
+    
+    // Fazer requisição AJAX
+    const formData = new FormData();
+    formData.append('planilha_num', planilhaNum);
+    formData.append('filters', JSON.stringify(filters));
+    
+    fetch('{{ url_for("preview_filters") }}', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Atualizar estatísticas
+            const reduction = data.original_count - data.filtered_count;
+            const percentReduction = ((reduction / data.original_count) * 100).toFixed(1);
+            
+            if (data.filters_applied === 0) {
+                statsDiv.innerHTML = `<strong>Total:</strong> ${data.original_count} linhas`;
+                statsDiv.className = 'alert alert-info';
+            } else {
+                statsDiv.innerHTML = `
+                    <strong>Filtros aplicados:</strong> ${data.filters_applied} |
+                    <strong>Resultado:</strong> ${data.filtered_count} de ${data.original_count} linhas
+                    ${reduction > 0 ? `<span class="badge bg-success ms-2">-${reduction} linhas (${percentReduction}%)</span>` : ''}
+                `;
+                statsDiv.className = data.filtered_count > 0 ? 'alert alert-success' : 'alert alert-warning';
+            }
+            
+            // Atualizar preview
+            if (data.filtered_count > 0 && data.preview_data.length > 0) {
+                let tableHtml = `
+                    <table class="table table-sm table-striped">
+                        <thead>
+                            <tr>`;
+                
+                data.columns.forEach(col => {
+                    tableHtml += `<th style="font-size: 0.8em;">${col}</th>`;
+                });
+                
+                if (data.columns.length === 6) {
+                    tableHtml += `<th style="font-size: 0.8em;">...</th>`;
+                }
+                
+                tableHtml += `</tr></thead><tbody>`;
+                
+                data.preview_data.forEach(row => {
+                    tableHtml += '<tr>';
+                    data.columns.forEach(col => {
+                        const value = row[col] !== null && row[col] !== undefined ? row[col] : 'VAZIO';
+                        tableHtml += `<td style="font-size: 0.8em;">${value}</td>`;
+                    });
+                    if (data.columns.length === 6) {
+                        tableHtml += `<td style="font-size: 0.8em;">...</td>`;
+                    }
+                    tableHtml += '</tr>';
+                });
+                
+                tableHtml += '</tbody></table>';
+                previewDiv.innerHTML = tableHtml;
+            } else {
+                previewDiv.innerHTML = '<div class="alert alert-warning">Nenhuma linha corresponde aos filtros aplicados</div>';
+            }
+        } else {
+            statsDiv.innerHTML = `<strong>Erro:</strong> ${data.error}`;
+            statsDiv.className = 'alert alert-danger';
+            previewDiv.innerHTML = '';
+        }
+    })
+    .catch(error => {
+        console.error('Erro na requisição:', error);
+        statsDiv.innerHTML = '<strong>Erro:</strong> Falha na comunicação com o servidor';
+        statsDiv.className = 'alert alert-danger';
+        previewDiv.innerHTML = '';
+    });
+}
+
+// Funções de totalizadores
+function selectAllTotals() {
+    const checkboxes = document.querySelectorAll('input[name="total_columns"]');
+    checkboxes.forEach(checkbox => checkbox.checked = true);
+}
+
+function clearAllTotals() {
+    const checkboxes = document.querySelectorAll('input[name="total_columns"]');
+    checkboxes.forEach(checkbox => checkbox.checked = false);
+}
+
+// Funções de submissão
+function proceedWithFiltersAndMapping() {
+    const mapping = collectCurrentMapping();
+    const filters1 = collectFilters(1);
+    const filters2 = collectFilters(2);
+    const totalColumns = Array.from(document.querySelectorAll('input[name="total_columns"]:checked')).map(cb => cb.value);
+    
+    console.log('[DEBUG] Mapeamento coletado:', mapping);
+    console.log('[DEBUG] Filtros1 coletados:', filters1);
+    console.log('[DEBUG] Filtros2 coletados:', filters2);
+    console.log('[DEBUG] Totalizadores coletados:', totalColumns);
+    
+    // Validar se há pelo menos um mapeamento
+    if (Object.keys(mapping).length === 0) {
+        alert('Por favor, configure pelo menos um mapeamento de colunas antes de prosseguir.');
+        return;
+    }
+    
+    // Garantir que os campos hidden existam
+    let mappingInput = document.getElementById('confirmed_mapping');
+    if (!mappingInput) {
+        console.error('[ERROR] Campo confirmed_mapping não encontrado!');
+        return;
+    }
+    
+    let filters1Input = document.getElementById('filters1');
+    if (!filters1Input) {
+        console.error('[ERROR] Campo filters1 não encontrado!');
+        return;
+    }
+    
+    let filters2Input = document.getElementById('filters2');
+    if (!filters2Input) {
+        console.error('[ERROR] Campo filters2 não encontrado!');
+        return;
+    }
+    
+    // Preencher campos com validação
+    try {
+        mappingInput.value = JSON.stringify(mapping);
+        filters1Input.value = JSON.stringify(filters1);
+        filters2Input.value = JSON.stringify(filters2);
+        
+        console.log('[DEBUG] Campos preenchidos com sucesso');
+        console.log('[DEBUG] confirmed_mapping:', mappingInput.value);
+        console.log('[DEBUG] filters1:', filters1Input.value);
+        console.log('[DEBUG] filters2:', filters2Input.value);
+    } catch (error) {
+        console.error('[ERROR] Erro ao serializar dados:', error);
+        alert('Erro ao preparar dados para envio.');
+        return;
+    }
+    
+    // Adicionar totalizadores se houver
+    let totalInput = document.getElementById('total_columns_input');
+    if (!totalInput) {
+        totalInput = document.createElement('input');
+        totalInput.type = 'hidden';
+        totalInput.name = 'total_columns';
+        totalInput.id = 'total_columns_input';
+        document.getElementById('mappingForm').appendChild(totalInput);
+    }
+    
+    try {
+        totalInput.value = JSON.stringify(totalColumns);
+        console.log('[DEBUG] total_columns:', totalInput.value);
+    } catch (error) {
+        console.error('[ERROR] Erro ao serializar totalizadores:', error);
+        totalInput.value = '[]';
+    }
+    
+    // Submeter formulário
+    const form = document.getElementById('mappingForm');
+    if (!form) {
+        console.error('[ERROR] Formulário não encontrado!');
+        return;
+    }
+    
+    form.action = '{{ url_for("compare_with_filters_and_mapping") }}';
+    console.log('[DEBUG] Submetendo formulário para:', form.action);
+    form.submit();
+}
+
+function proceedWithMapping() {
+    const mapping = collectCurrentMapping();
+    
+    if (Object.keys(mapping).length === 0) {
+        alert('Por favor, configure pelo menos um mapeamento de colunas antes de prosseguir.');
+        return;
+    }
+    
+    document.getElementById('confirmed_mapping').value = JSON.stringify(mapping);
+    document.getElementById('mappingForm').action = '{{ url_for("quick_compare") }}';
+    document.getElementById('mappingForm').submit();
+}
+
+// Inicialização
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar preview de filtros
+    updateFilterPreview();
+});
+</script>
+</script>
+
+<style>
+.mapping-row:hover {
+    background-color: #f8f9fa;
+}
+
+.stats-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.stats-card .card-body {
+    padding: 1.5rem;
+}
+</style>
+{% endblock %}

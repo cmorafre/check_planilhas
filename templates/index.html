@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">🔍 Comparar Planilhas</h4>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">
+                    Faça upload de duas planilhas (Excel ou CSV) para comparar as diferenças entre elas.
+                </p>
+                
+                <form method="POST" action="{{ url_for('analyze_files') }}" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="file1" class="form-label">
+                            <strong>📄 Planilha Origem</strong>
+                        </label>
+                        <input type="file" class="form-control" id="file1" name="file1" 
+                               accept=".xlsx,.xls,.csv" required>
+                        <div class="form-text">Formatos aceitos: .xlsx, .xls, .csv</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="file2" class="form-label">
+                            <strong>📄 Planilha Destino</strong>
+                        </label>
+                        <input type="file" class="form-control" id="file2" name="file2" 
+                               accept=".xlsx,.xls,.csv" required>
+                        <div class="form-text">Formatos aceitos: .xlsx, .xls, .csv</div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            🤖 Analisar e Mapear Automaticamente
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-body">
+                <h5>ℹ️ Como funciona:</h5>
+                <ul class="mb-0">
+                    <li>O sistema compara as estruturas das planilhas (colunas e dimensões)</li>
+                    <li>Identifica diferenças nos dados célula por célula</li>
+                    <li>Mostra linhas e colunas que existem apenas em uma das planilhas</li>
+                    <li>Suporta arquivos de até 16MB</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
