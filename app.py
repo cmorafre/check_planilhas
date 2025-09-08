@@ -697,6 +697,15 @@ def compare_spreadsheets_with_mapping(file1_path, file2_path, column_mapping, fi
             'mapped_cols': len(column_mapping)
         }
         
+        # Comparar colunas (necessário para o template results.html)
+        cols1 = set(df1.columns)
+        cols2 = set(df2.columns)
+        results['columns'] = {
+            'only_in_file1': list(cols1 - cols2),
+            'only_in_file2': list(cols2 - cols1),
+            'common': list(cols1 & cols2)
+        }
+        
         # Identificar linhas exclusivas usando mapeamento específico
         if len(df1) > 0 or len(df2) > 0:
             rows_only_in_1, rows_only_in_2, comparison_columns = find_unique_rows_by_intelligent_keys(df1, df2, column_mapping)
